@@ -6,6 +6,7 @@
 ###############################################
 
 import numpy as np
+import random
 
 class Network:
 
@@ -37,3 +38,30 @@ class Network:
         self.biasRange[1] = float(input("Maximum Bias value? "))
         self.weightRange[0] = float(input("Minimum Weight value? "))
         self.weightRange[1] = float(input("Maximum weight value? "))
+
+    def initMatrix(self):
+        #define weight matrixes
+        self.weightMatrix = []
+        for i in range (1,len(self.Nodes)):
+            self.weightMatrix.append(np.empty([self.Nodes[i],self.Nodes[i-1]],dtype=float))
+        for mat in self.weightMatrix:
+            for i in range (0,len(mat)):
+                for j in range(0,len(mat[i])):
+                    mat[i][j] = random.uniform(self.weightRange[0],self.weightRange[1])
+        #print(self.weightMatrix)
+
+        #define bias matrixes
+        self.biasMatrix = []
+        for i in range(1, len(self.Nodes)):
+            self.biasMatrix.append(np.empty([self.Nodes[i], self.Nodes[i-1]], dtype=float))
+        for mat in self.biasMatrix:
+            for i in range(0, len(mat)):
+                for j in range(0, len(mat[i])):
+                    mat[i][j] = random.uniform(self.biasRange[0], self.biasRange[1])
+        #print(self.biasMatrix)
+
+        #define Node Matrixes
+        self.nodeMatrix = []
+        for i in range(len(self.Nodes)):
+            self.nodeMatrix.append(np.empty([self.Nodes[i],1],dtype = float))
+        print(self.nodeMatrix)
