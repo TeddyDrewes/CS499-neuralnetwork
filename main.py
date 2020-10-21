@@ -12,3 +12,4 @@ if __name__ == "__main__":
     myNetwork.setNetworkSize()
     print(myNetwork)
     myNetwork.initMatrix()
+    myNetwork.runNetwork()
