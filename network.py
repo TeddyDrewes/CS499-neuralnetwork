@@ -1,5 +1,5 @@
 # created 24 Sep 2020, Teddy Drewes
-# last update 21 Oct 2020
+# last update 29 Oct 2020
 ###############################################
 # The network object
 # Runs the network
@@ -19,11 +19,14 @@ class Network:
         self.Nodes = [784,100,32,16,10]
         self.biasRange = [-10,10]
         self.weightRange = [-1,1]
-        self.iterations = 10000
-        self.input=[]
+        self.numTests = 10000
+        self.numTraining = 60000
+        self.testInput=[]
+        self.trainInput=[]
         self.correctOutput = 0
         self.output= []
         self.backprop = True
+        self.stochaticGroup = 100
         # numbers for analysis
         self.totalTests = 0
         self.totalRight = 0
@@ -48,23 +51,35 @@ class Network:
         #self.biasRange[1] = float(input("Maximum Bias value? "))
         #self.weightRange[0] = float(input("Minimum Weight value? "))
         #self.weightRange[1] = float(input("Maximum weight value? "))
-        #self.iterations = int(input("Number of Training Iterations: "))
+        #self.numTraining = int(input("number of Training Data: "))
+        #self.numTests = int(input("Number of Training Tests: "))
         #networkType = int(input("Back-propagation (0) or only Forward-propagation (1)? "))
         #if networkType == 0:
         #    self.backprop = True
         #else:
         #    self.backprop = False
-        self.setInputMNIST(self.iterations)
+        self.setInputMNISTtesting(self.numTests)
+        self.setInputMNISTtraining(self.numTraining)
         self.setOutput(self.M)
 
-    #reads in the number of training sets to be used
-    def setInputMNIST(self, numInputSets):
+    #reads in the number of test sets to be used
+    def setInputMNISTtesting(self, numInputSets):
         # implement code here for this/can change based on data set
         print("setting NMIST input up")
         myMNIST = MNISTdd()
         myMNIST.runDriver()
         for i in range(numInputSets):
-            self.input.append((myMNIST.data_dict['test images'][i],myMNIST.data_dict['test labels'][i]))
+            self.testInput.append((myMNIST.data_dict['test images'][i],myMNIST.data_dict['test labels'][i]))
+
+    #reads in the number of training sets to be used
+    def setInputMNISTtraining(self, numInputSets):
+        # implement code here for this/can change based on data set
+        print("setting NMIST input up")
+        myMNIST = MNISTdd()
+        myMNIST.runDriver()
+        for i in range(numInputSets):
+            self.trainInput.append((myMNIST.data_dict['train images'][i],myMNIST.data_dict['train labels'][i]))
+
 
 
     # sets the output list for what each node will correspond to
@@ -97,11 +112,87 @@ class Network:
         for i in range(len(self.Nodes)):
             self.nodeMatrix.append(np.empty([1,self.Nodes[i]],dtype = float))
         #print(self.nodeMatrix)
+        
+    def initDeltaMatrixes(self):
+        # define deltaWeight matrixes
+        self.deltaWeightMatrix = []
+        for i in range(1, len(self.Nodes)):
+            self.deltaWeightMatrix.append(np.empty([self.Nodes[i - 1], self.Nodes[i]], dtype=float))
+        for mat in self.deltaWeightMatrix:
+            for i in range(0, len(mat)):
+                for j in range(0, len(mat[i])):
+                    mat[i][j] = random.uniform(0, 0)
+        #print(self.deltaWeightMatrix)
+        
+        # define deltaCost matrixes
+        self.deltaCostMatrix = []
+        for i in range(1, len(self.Nodes)):
+            self.deltaCostMatrix.append(np.empty([1, self.Nodes[i]], dtype=float))
+        for mat in self.deltaCostMatrix:
+            for i in range(0, len(mat)):
+                mat[i] = random.uniform(0,0)
+        # print(self.deltaCostMatrix)
 
+        # define deltaBias matrixes
+        self.deltaBiasMatrix = []
+        for i in range(1, len(self.Nodes)):
+            self.deltaBiasMatrix.append(np.empty([1, self.Nodes[i]], dtype=float))
+        for mat in self.deltaBiasMatrix:
+            for i in range(0, len(mat)):
+                mat[i] = random.uniform(0,0)
+        # print(self.deltaBiasMatrix)
+
+        self.answerMatrix = []
+        for i in range(10):
+            self.answerMatrix.append(0)
+
+    def setCorrect(self, correct):
+        for i in range(10):
+            if i == correct:
+                self.answerMatrix[i] = 1
+            else:
+                self.answerMatrix[i] = 0
+    
     # runs the network
     def runNetwork(self):
-        for i in range(self.iterations):
-            self.getInput(self.input[i]) #change this line to the input being used
+
+        # training on backprop
+        for i in range(0,self.numTraining,100):
+            #initialize all the matrixes for use in stochic groupings
+            self.initDeltaMatrixes()
+            #print((str(i)))
+
+            for n in range(self.stochaticGroup):
+                # run the network
+                self.getInput(self.trainInput[i+n])
+                for m in range(1, len(self.Nodes)):
+                    self.sumAndMult(m)
+                    self.addBias(m)
+                    self.scale(m)
+                # get correct answer and network answer
+                networkGuess = np.argmax(self.nodeMatrix[len(self.Nodes)-1][0])
+                self.setCorrect(networkGuess)
+                #print(networkGuess)
+                
+                for L in range(self.D, -1, -1):
+                    # set costs per node
+                    self.setCost(L)
+                    # increment delta bias
+                    for j in range(self.Nodes[L+1]):
+                        self.deltaBiasMatrix[L][0][j] = self.deltaBiasMatrix[L][0][j] + self.deltaBias(L,j)
+                        for k in range(self.Nodes[L]):
+                            self.deltaWeightMatrix[L][k][j] = self.deltaWeightMatrix[L][k][j] + self.deltaWeight(L,j,k)
+
+            # add delta's to weights/biases
+            self.weightMatrix = self.weightMatrix + self.deltaWeightMatrix
+            self.biasMatrix = self.biasMatrix + self.deltaBiasMatrix
+            print("Stochatic Group Complete")
+
+        # run on both forward and backprop
+        self.totalTests = 0
+        self.totalRight = 0
+        for i in range(self.numTests):
+            self.getInput(self.testInput[i])
             for j in range (1,len(self.Nodes)):
                 self.sumAndMult(j)
                 self.addBias(j)
@@ -111,14 +202,30 @@ class Network:
             networkGuess = np.argmax(self.nodeMatrix[len(self.Nodes)-1][0])
             if self.output[networkGuess] == self.correctOutput:
                 self.totalRight += 1
-                print("Correct!")
-            #backprop
-            if self.backprop == True:
-                #do backprop
+                #print("Correct!")
 
         print("Total tests: " + str(self.totalTests))
         print("Total correct: " + str(self.totalRight))
         print("Final Error: " + str(1-(self.totalRight/self.totalTests)))
+
+    #sets the cost per each node
+    def setCost(self, Layer):
+        for node in range(len(self.deltaCostMatrix[Layer])):
+            if Layer == (self.D):
+                self.deltaCostMatrix[Layer][0][node] = 2 * (self.nodeMatrix[Layer+1][0][node]-self.answerMatrix[node])
+            else:
+                for nextNode in range(len(self.deltaCostMatrix[Layer+1])):
+                    self.deltaCostMatrix[Layer][0][node] = self.deltaCostMatrix[Layer][0][node] + (self.weightMatrix[Layer+1][node][nextNode] * self.dsigmoid(self.nodeMatrix[Layer+1][0][nextNode]) * self.deltaCostMatrix[Layer+1][0][nextNode])
+    # gets the delta bias given a node
+    def deltaBias(self, Layer, node):
+        return (1)*(self.dsigmoid(self.nodeMatrix[Layer+1][0][node]))*(self.deltaCostMatrix[Layer][0][node])
+    # gets the weight bias given a layer, node, and ndoe from
+    def deltaWeight(self, Layer, node, fromNode):
+        x = (self.nodeMatrix[Layer][0][fromNode])
+        y = (self.dsigmoid(self.nodeMatrix[Layer+1][0][node]))
+        z = (self.deltaCostMatrix[Layer][0][node])
+        a = x * y * z
+        return x
 
     # takes the input from the input set and prepares the network.
     # the second part of the tuple is the correct output
@@ -148,5 +255,14 @@ class Network:
         #print("Scaling node")
         for i in range(self.Nodes[layer]):
             #print(str(layer) + ' ' + str(i))
-            self.nodeMatrix[layer][0][i] = (1/(1+np.exp(-(self.nodeMatrix[layer][0][i]))))
+            self.nodeMatrix[layer][0][i] = self.sigmoid(self.nodeMatrix[layer][0][i])
             #print(str(layer) + ' ' + str(i))
+
+    # sigmoid, used to easily calculate sigmoid
+    def sigmoid(self, x):
+        return 1/(1+np.exp(x))
+    # dsigmoid, returns the derivative of the sigmoid function for a given x
+    # not a true delta sigmoid as we already have the sigmoid'ed value, using the dsigmoid, we can simplify this functio
+    def dsigmoid(self, x):
+        return x * (1-x)
+
